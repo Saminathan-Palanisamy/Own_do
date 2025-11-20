@@ -1,0 +1,99 @@
+# ----------------------------
+# Python
+# ----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+
+# Ignore Python compiled files
+*.swp
+*~
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# ----------------------------
+# Virtual environment
+# ----------------------------
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# ----------------------------
+# Environment variables
+# ----------------------------
+*.env
+.env.*
+!.env.example
+
+# ----------------------------
+# Logs & temp files
+# ----------------------------
+*.log
+*.tmp
+*.temp
+*.pid
+
+# ----------------------------
+# IDE / Editor files
+# ----------------------------
+.vscode/
+.idea/
+
+# ----------------------------
+# OS files
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# Database & Cache
+# ----------------------------
+*.sqlite3
+*.db
+*.sqlite
+alembic/versions/*.pyc
+
+# ----------------------------
+# FastAPI specific
+# ----------------------------
+# auto-generated OpenAPI docs
+openapi.json
+openapi.yaml
+
+# Cache
+__pycache__/
+.cache/
+
+# ----------------------------
+# Pydantic / JSON artifacts
+# ----------------------------
+*.json
+!config.json
+!*.schema.json
+
+# ----------------------------
+# Backup files
+# ----------------------------
+*.bak
+*.backup
+
+# ----------------------------
+# Byte-compiled C extensions
+# ----------------------------
+*.so
+
+# ----------------------------
+# Coverage reports
+# ----------------------------
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.xml
+.pytest_cache/
