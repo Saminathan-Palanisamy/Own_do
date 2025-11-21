@@ -14,14 +14,16 @@ class RegisterRequest(BaseModel):
     role: UserRole
     contact_number: Optional[str]
 
-
-class RegisterResponse(BaseModel):
+class RegisterData(BaseModel):
     id: int
     username: Optional[str]
     email: EmailStr
     role: str
-    is_active: bool
-    created_at: datetime
+
+class RegisterResponse(BaseModel):
+    status: str
+    data: RegisterData
+
 
 
 class LoginRequest(BaseModel):

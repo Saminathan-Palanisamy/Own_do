@@ -13,7 +13,6 @@ app = FastAPI(title="Own_do_project API - session based")
 app.include_router(auth.router, prefix="/User_setup", tags=["User_SetUp"])
 
 
-
 @app.get("/")
 def root():
     return JSONResponse(
