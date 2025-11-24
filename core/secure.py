@@ -107,52 +107,71 @@ async def optional_current_user(request: Request, db: Session = Depends(get_db))
     except Exception:
         return None
 #----------------------------------
-
 def initialize_session(user_id: int, user_payload: dict, request: Request, db: Session):
-    try:    
+    try:
         session_uid = str(uuid.uuid4())
+        
+        access_payload = user_payload.copy()
+        access_payload.update({"user_id": user_id, "session_id": session_uid})
+        refresh_payload = {"user_id": user_id, "session_id": session_uid}
 
-        existing_session = db.query(models.LoginSession).filter(
-            models.LoginSession.user_id == user_id,
-            models.LoginSession.is_active == True
-        ).first()
+        access_token = create_access_token(access_payload)
+        refresh_token = create_refresh_token(refresh_payload)
 
-        auth_token = create_access_token(user_payload)
-
-        if existing_session:
-            existing_session.auth_token = auth_token
-            existing_session.logout_time = datetime.utcnow() + timedelta(days=2)
-            db.commit()
-            return existing_session.session_id, auth_token
-
+        
         new_session = models.LoginSession(
             session_id=session_uid,
             user_id=user_id,
-            auth_token=auth_token,
+            auth_token=access_token,
+            refresh_token=refresh_token,
             is_active=True
         )
         db.add(new_session)
         db.commit()
-        return session_uid, auth_token
+        db.refresh(new_session)
+
+        return session_uid, access_token, refresh_token
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"session id creating failed:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"session creation failed: {str(e)}")
 
-def refresh_session(session_id: str, db: Session):
+# Refresh endpoint logic: validate refresh token, rotate tokens, persist
+def refresh_session(session_id: str, provided_refresh_token: str, db: Session):
     try:
-
         session = db.query(models.LoginSession).filter(
             models.LoginSession.session_id == session_id,
             models.LoginSession.is_active == True
         ).first()
-        
         if not session:
-            raise HTTPException(status_code=401, detail="Invalid session")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
 
-        payload = {"user_id": session.user_id, "session_id": session.session_id}
-        new_token = create_refresh_token(payload)
+       
+        if session.refresh_token != provided_refresh_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token mismatch")
 
-        session.auth_token = new_token
+      
+        try:
+            payload = decode_token(provided_refresh_token)
+        except jwt.ExpiredSignatureError:
+            
+            session.is_active = False
+            session.logout_time = datetime.utcnow()
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+        
+        user_id = session.user_id
+        access_payload = {"user_id": user_id, "session_id": session_id}
+        new_access = create_access_token(access_payload)
+        new_refresh = create_refresh_token({"user_id": user_id, "session_id": session_id})
+
+        
+        session.auth_token = new_access
+        session.refresh_token = new_refresh
         db.commit()
-        return {"session_id": session_id, "auth_token": new_token}
+        return {"session_id": session_id, "access_token": new_access, "refresh_token": new_refresh}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"refresh failed in function:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"refresh failed: {str(e)}")

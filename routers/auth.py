@@ -100,7 +100,7 @@ def login_user(request: Request, response: Response, payload: schemas.LoginReque
             "role": user.role
         }
 
-        session_id, auth_token = secure.initialize_session(user.id, user_payload, request, db)
+        session_id, auth_token, refresh_token = secure.initialize_session(user.id, user_payload, request, db)
 
         response.headers["Session_id"] = session_id
         response.headers["Authorization"] = auth_token
@@ -114,6 +114,7 @@ def login_user(request: Request, response: Response, payload: schemas.LoginReque
                 "message": "Login successful",
                 "session_id": session_id,
                 "auth_token": auth_token,
+                "refresh_token":refresh_token,
                 "user_role": user.role,
                 "username": user.username,
                 "email": user.email
@@ -128,8 +129,17 @@ def login_user(request: Request, response: Response, payload: schemas.LoginReque
 @router.post("/refresh")
 def refresh_using_secure(payload: schemas.RefreshRequest, db: Session = Depends(get_db)):
     try:
-        result = secure.refresh_session(payload.session_id, db)
-        return JSONResponse(status_code=200, content=result)
+        result = secure.refresh_session(payload.session_id,payload.refresh_token, db)
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, 
+            content={
+                "access_token": result["access_token"],
+                "refresh_token": result["refresh_token"],
+                "token_type": "bearer",
+                "session_id": result["session_id"]
+                }
+            )
+    
     except HTTPException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"refresh failed:{str(e)}")
 #--------------------------------------------------------------------------------
@@ -154,7 +164,7 @@ def logout(payload: schemas.LogoutRequest, db: Session = Depends(database.get_db
             {"detail": "Logged out"}
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to login.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unable to login.:{str(e)}")
 #--------------------------------------------------------------------------------
 
 # @router.post("/login", response_model=schemas.TokenResponse)
