@@ -12,6 +12,7 @@ import uuid
 from fastapi import Request
 
 
+
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = os.getenv("JWT_SECRET", "supersecret")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -91,7 +92,21 @@ def get_current_user(
         )
     
     #---------
+async def optional_current_user(request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("Authorization")
 
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header.replace("Bearer ", "").strip()
+
+    try:
+        payload = decode_token(token)
+        return payload
+    except Exception:
+        return None
+#----------------------------------
 
 def initialize_session(user_id: int, user_payload: dict, request: Request, db: Session):
     try:    
