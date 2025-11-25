@@ -1,5 +1,5 @@
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 import os
 from fastapi import Depends, HTTPException, status
@@ -10,13 +10,14 @@ from core.database import get_db
 from fastapi.responses import JSONResponse
 import uuid
 from fastapi import Request
+from enum import Enum
 
 
 
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = os.getenv("JWT_SECRET", "supersecret")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 3))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 10))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 2))
 
 
@@ -109,69 +110,68 @@ async def optional_current_user(request: Request, db: Session = Depends(get_db))
 #----------------------------------
 def initialize_session(user_id: int, user_payload: dict, request: Request, db: Session):
     try:
+
         session_uid = str(uuid.uuid4())
-        
+ 
         access_payload = user_payload.copy()
         access_payload.update({"user_id": user_id, "session_id": session_uid})
-        refresh_payload = {"user_id": user_id, "session_id": session_uid}
 
         access_token = create_access_token(access_payload)
-        refresh_token = create_refresh_token(refresh_payload)
 
-        
+
         new_session = models.LoginSession(
             session_id=session_uid,
             user_id=user_id,
             auth_token=access_token,
-            refresh_token=refresh_token,
+            login_time=datetime.utcnow(),
+            logout_time=datetime.utcnow() + timedelta(days=2),
             is_active=True
         )
         db.add(new_session)
         db.commit()
         db.refresh(new_session)
 
-        return session_uid, access_token, refresh_token
+        return session_uid, access_token
+    
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"session creation failed: {str(e)}")
 
-# Refresh endpoint logic: validate refresh token, rotate tokens, persist
-def refresh_session(session_id: str, provided_refresh_token: str, db: Session):
+# Refresh endpoint logic: validate refresh token.
+def refresh_session(session_id: str, db: Session):
     try:
-        session = db.query(models.LoginSession).filter(
-            models.LoginSession.session_id == session_id,
-            models.LoginSession.is_active == True
-        ).first()
+        session = (db.query(models.LoginSession).filter(models.LoginSession.session_id == session_id,models.LoginSession.is_active == True)
+            .first())
+
         if not session:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
+            raise HTTPException(status_code=404, detail="Session not found")
 
-       
-        if session.refresh_token != provided_refresh_token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token mismatch")
-
-      
-        try:
-            payload = decode_token(provided_refresh_token)
-        except jwt.ExpiredSignatureError:
-            
-            session.is_active = False
-            session.logout_time = datetime.utcnow()
+        if session.logout_time < datetime.now(timezone.utc):
             db.commit()
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
-        except Exception:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+            raise HTTPException(status_code=401, detail="Session expired")
+        user = db.query(models.User).filter(models.User.id == session.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-        
-        user_id = session.user_id
-        access_payload = {"user_id": user_id, "session_id": session_id}
-        new_access = create_access_token(access_payload)
-        new_refresh = create_refresh_token({"user_id": user_id, "session_id": session_id})
+        new_payload = {
+            "user_id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "session_id": session.session_id
+        }
 
-        
-        session.auth_token = new_access
-        session.refresh_token = new_refresh
+        new_access_token = create_access_token(new_payload)
+
+        session.auth_token = new_access_token
         db.commit()
-        return {"session_id": session_id, "access_token": new_access, "refresh_token": new_refresh}
-    except HTTPException:
-        raise
+        db.refresh(session)
+
+        return {
+            "session_id": session.session_id,
+            "access_token": new_access_token,
+        }
+
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"refresh failed: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"refresh failed: {str(e)}")
+
+
+#----------------------------------------------------------------------------

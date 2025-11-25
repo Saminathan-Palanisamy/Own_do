@@ -32,5 +32,4 @@ class LoginSession(Base):
     login_time = Column(DateTime(timezone=True), server_default=func.now())
     logout_time = Column(DateTime(timezone=True), nullable=True)
     auth_token = Column(String, nullable=True)
-    refresh_token = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
