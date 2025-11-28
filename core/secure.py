@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 import uuid
 from fastapi import Request
 from enum import Enum
-
+from models.models import Cart
 
 
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -175,3 +175,13 @@ def refresh_session(session_id: str, db: Session):
 
 
 #----------------------------------------------------------------------------
+# for cart
+def get_or_create_cart(user_id: int, db: Session):
+    cart = db.query(Cart).filter(Cart.user_id == user_id).first()
+    if not cart:
+        cart = Cart(user_id=user_id)
+        db.add(cart)
+        db.commit()
+        db.refresh(cart)
+    return cart
+#---------------------------------------------------------------------------

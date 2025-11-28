@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text,Float
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text,Float, Numeric
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -76,4 +76,46 @@ class ProductImage(Base):
 
     product_id = Column(Integer, ForeignKey("products.id"))
     product = relationship("Product", back_populates="images")
+#---------------------------------------------------------------
+
+class Cart(Base):
+    __tablename__ = "carts"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+
+    items = relationship("CartItem", back_populates="cart", cascade="all, delete-orphan")
+#---------------------------------------------------------------
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+    id = Column(Integer, primary_key=True, index=True)
+    cart_id = Column(Integer, ForeignKey("carts.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    qty = Column(Integer, nullable=False)
+    price_snapshot = Column(Numeric(10, 2), nullable=False)
+
+    cart = relationship("Cart", back_populates="items")
+    product = relationship("Product")  
+#---------------------------------------------------------------
+
+class Order(Base):
+    __tablename__ = "orders"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
+    total = Column(Numeric(12, 2), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+#---------------------------------------------------------------
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=False)
+    qty = Column(Integer, nullable=False)
+    price_snapshot = Column(Numeric(10, 2), nullable=False)
+
+    order = relationship("Order", back_populates="items")
+    product = relationship("Product")
 #---------------------------------------------------------------
