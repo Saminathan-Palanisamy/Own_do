@@ -27,7 +27,7 @@ def add_to_cart(payload: AddToCartRequest,
         ).first()
 
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
         item = db.query(CartItem).filter(
             CartItem.cart_id == cart.id,
@@ -129,7 +129,7 @@ def remove_item(product_id: int,
         ).first()
 
         if not item:
-            raise HTTPException(status_code=404, detail="Item not found in cart")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found in cart")
 
         db.delete(item)
         db.commit()
@@ -139,7 +139,7 @@ def remove_item(product_id: int,
             content={"message": "Item removed successfully"}
 )
     except Exception as e:
-        raise HTTPException(status_code=400,
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Unable to remove item: {str(e)}")
 
 #-------------------------------------------------------------------------------------------
@@ -154,7 +154,7 @@ def place_order(db: Session = Depends(get_db),
         cart = db.query(Cart).filter(Cart.user_id == current_user.id).first()
 
         if not cart or not cart.items:
-            raise HTTPException(status_code=400, detail="Cart is empty")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cart is empty")
 
   
         for item in cart.items:
@@ -165,7 +165,7 @@ def place_order(db: Session = Depends(get_db),
 
             if product.stock < item.qty:
                 raise HTTPException(
-                    status_code=400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Product '{product.name}' has only {product.stock} in stock"
                 )
 
@@ -219,70 +219,30 @@ def place_order(db: Session = Depends(get_db),
         )
 
     except Exception as e:
-        raise HTTPException(status_code=400,
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Order placement failed: {str(e)}")
 
+#-----------------------------------------------------------------------------------------------------------------
+@router.get("/orders", dependencies=[Depends(admin_required)])
+def list_orders(
+    order_id: int | None = None,
+    status_filter: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
 
-@router.get("/orders/{order_id}", response_model=OrderResponse, dependencies=[Depends(admin_required)])
-def get_order(order_id: int,
-              db: Session = Depends(get_db),
-              current_user: dict = Depends(get_current_user)):
-    """
-    {"pending", "confirmed", "shipped", "delivered", "cancelled"}
-    """
+    # 1. If order_id is passed → return that order
+    if order_id is not None:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
 
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-        "id": order.id,
-        "total": float(order.total),
-        "status": order.status,
-        "created_at": order.created_at.isoformat(),
-        "items": [
-            {
-                "product_id": i.product_id,
-                "qty": i.qty,
-                "price_snapshot": float(i.price_snapshot)
-            }
-            for i in order.items
-        ]
-    })
-
-@router.patch("/orders/{order_id}/status", dependencies=[Depends(admin_required)])
-def update_order_status(order_id: int,
-                        payload: UpdateOrderStatusRequest,
-                        db: Session = Depends(get_db),
-                        current_user: dict = Depends(get_current_user)):
-
-    new_status = payload.status.lower().strip()
-
-    if new_status not in ALLOWED_STATUSES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
-        )
-
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-
-    order.status = new_status
-    db.commit()
-    db.refresh(order)
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "message": "Order status updated",
-            "data": {
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
                 "id": order.id,
-                "status": order.status,
                 "total": float(order.total),
+                "status": order.status,
                 "created_at": order.created_at.isoformat(),
                 "items": [
                     {
@@ -293,5 +253,97 @@ def update_order_status(order_id: int,
                     for i in order.items
                 ]
             }
+        )
+
+    # 2. Filter by status if provided
+    query = db.query(Order)
+
+    if status_filter:
+        s = status_filter.lower().strip()
+        if s not in ALLOWED_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
+            )
+        query = query.filter(Order.status == s)
+
+    # 3. Get all / filtered orders
+    orders = query.all()
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "count": len(orders),
+            "status_filter": status_filter,
+            "orders": [
+                {
+                    "id": order.id,
+                    "total": float(order.total),
+                    "status": order.status,
+                    "created_at": order.created_at.isoformat(),
+                    "items": [
+                        {
+                            "product_id": i.product_id,
+                            "qty": i.qty,
+                            "price_snapshot": float(i.price_snapshot)
+                        }
+                        for i in order.items
+                    ]
+                }
+                for order in orders
+            ]
         }
     )
+
+#-------------------------------------------------------------------------------------------
+
+
+@router.patch("/orders/{order_id}/status", dependencies=[Depends(admin_required)])
+def update_order_status(order_id: int,
+                        payload: UpdateOrderStatusRequest,
+                        db: Session = Depends(get_db),
+                        current_user: dict = Depends(get_current_user)):
+    """
+    {"pending", "confirmed", "shipped", "delivered", "cancelled"}
+    """
+    try:
+        new_status = payload.status.lower().strip()
+
+        if new_status not in ALLOWED_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
+            )
+
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+
+
+        order.status = new_status
+        db.commit()
+        db.refresh(order)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": "Order status updated",
+                "data": {
+                    "id": order.id,
+                    "status": order.status,
+                    "total": float(order.total),
+                    "created_at": order.created_at.isoformat(),
+                    "items": [
+                        {
+                            "product_id": i.product_id,
+                            "qty": i.qty,
+                            "price_snapshot": float(i.price_snapshot)
+                        }
+                        for i in order.items
+                    ]
+                }
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"order update failed: {str(e)}")
+#-------------------------------------------------------------------------------------------
