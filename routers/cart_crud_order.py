@@ -227,19 +227,65 @@ def place_order(db: Session = Depends(get_db),
 def list_orders(
     order_id: int | None = None,
     status_filter: str | None = None,
+    page: int = 1,              # NEW
+    limit: int = 10,            # NEW
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-
-    # 1. If order_id is passed → return that order
+    """
+    {"pending", "confirmed", "shipped", "delivered", "cancelled"}
+    """
+    # 1. If order_id is provided → return that single order
     if order_id is not None:
         order = db.query(Order).filter(Order.id == order_id).first()
         if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
+            "id": order.id,
+            "total": float(order.total),
+            "status": order.status,
+            "created_at": order.created_at.isoformat(),
+            "items": [
+                {
+                    "product_id": i.product_id,
+                    "qty": i.qty,
+                    "price_snapshot": float(i.price_snapshot)
+                }
+                for i in order.items
+            ]
+        }
+)
+    # 2. Build the base query
+    query = db.query(Order)
+
+    # 3. Filter by status if provided
+    if status_filter:
+        s = status_filter.lower().strip()
+        if s not in ALLOWED_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
+            )
+        query = query.filter(Order.status == s)
+
+    # 4. Pagination logic
+    total_orders = query.count()
+    offset = (page - 1) * limit
+
+    orders = query.offset(offset).limit(limit).all()
+
+    # 5. Return paginated response
+    return JSONResponse({
+        "page": page,
+        "limit": limit,
+        "total_orders": total_orders,
+        "total_pages": (total_orders + limit - 1) // limit,
+        "status_filter": status_filter,
+        "orders": [
+            {
                 "id": order.id,
                 "total": float(order.total),
                 "status": order.status,
@@ -253,48 +299,10 @@ def list_orders(
                     for i in order.items
                 ]
             }
-        )
-
-    # 2. Filter by status if provided
-    query = db.query(Order)
-
-    if status_filter:
-        s = status_filter.lower().strip()
-        if s not in ALLOWED_STATUSES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
-            )
-        query = query.filter(Order.status == s)
-
-    # 3. Get all / filtered orders
-    orders = query.all()
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "count": len(orders),
-            "status_filter": status_filter,
-            "orders": [
-                {
-                    "id": order.id,
-                    "total": float(order.total),
-                    "status": order.status,
-                    "created_at": order.created_at.isoformat(),
-                    "items": [
-                        {
-                            "product_id": i.product_id,
-                            "qty": i.qty,
-                            "price_snapshot": float(i.price_snapshot)
-                        }
-                        for i in order.items
-                    ]
-                }
-                for order in orders
-            ]
-        }
-    )
-
+            for order in orders
+        ]
+    }
+)
 #-------------------------------------------------------------------------------------------
 
 
