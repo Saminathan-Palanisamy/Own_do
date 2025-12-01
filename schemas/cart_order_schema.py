@@ -38,8 +38,12 @@ class OrderItemResponse(BaseModel):
 class OrderResponse(BaseModel):
     id: int
     total: float
+    status: str   #added after updating in github
     items: List[OrderItemResponse]
     created_at: str
 
     class Config:
         orm_mode = True
+
+class UpdateOrderStatusRequest(BaseModel):        #added after updating in github
+    status: str 

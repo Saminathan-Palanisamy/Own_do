@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from core.database import get_db
-from schemas.cart_order_schema import AddToCartRequest, CartResponse,OrderResponse
+from schemas.cart_order_schema import AddToCartRequest, CartResponse,OrderResponse,UpdateOrderStatusRequest
 from models.models import Cart, CartItem, Product,Order,OrderItem
-from core.role_based import any_registered_user, admin_or_user
+from core.role_based import any_registered_user, admin_or_user, admin_required
 from core.secure import get_current_user, get_or_create_cart
 from core import database
 from fastapi.responses import JSONResponse
 
 router = APIRouter() 
 get_db = database.get_db
+
+ALLOWED_STATUSES = {"pending", "confirmed", "shipped", "delivered", "cancelled"}
 
 @router.post("/add", dependencies=[Depends(any_registered_user)])
 def add_to_cart(payload: AddToCartRequest,
@@ -202,6 +204,7 @@ def place_order(db: Session = Depends(get_db),
                 "data": {
                     "id": order.id,
                     "total": float(order.total),
+                    "status": order.status,
                     "created_at": order.created_at.isoformat(),
                     "items": [
                         {
@@ -218,3 +221,77 @@ def place_order(db: Session = Depends(get_db),
     except Exception as e:
         raise HTTPException(status_code=400,
                             detail=f"Order placement failed: {str(e)}")
+
+
+@router.get("/orders/{order_id}", response_model=OrderResponse, dependencies=[Depends(admin_required)])
+def get_order(order_id: int,
+              db: Session = Depends(get_db),
+              current_user: dict = Depends(get_current_user)):
+    """
+    {"pending", "confirmed", "shipped", "delivered", "cancelled"}
+    """
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+        "id": order.id,
+        "total": float(order.total),
+        "status": order.status,
+        "created_at": order.created_at.isoformat(),
+        "items": [
+            {
+                "product_id": i.product_id,
+                "qty": i.qty,
+                "price_snapshot": float(i.price_snapshot)
+            }
+            for i in order.items
+        ]
+    })
+
+@router.patch("/orders/{order_id}/status", dependencies=[Depends(admin_required)])
+def update_order_status(order_id: int,
+                        payload: UpdateOrderStatusRequest,
+                        db: Session = Depends(get_db),
+                        current_user: dict = Depends(get_current_user)):
+
+    new_status = payload.status.lower().strip()
+
+    if new_status not in ALLOWED_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
+        )
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+
+    order.status = new_status
+    db.commit()
+    db.refresh(order)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "message": "Order status updated",
+            "data": {
+                "id": order.id,
+                "status": order.status,
+                "total": float(order.total),
+                "created_at": order.created_at.isoformat(),
+                "items": [
+                    {
+                        "product_id": i.product_id,
+                        "qty": i.qty,
+                        "price_snapshot": float(i.price_snapshot)
+                    }
+                    for i in order.items
+                ]
+            }
+        }
+    )

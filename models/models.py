@@ -103,6 +103,7 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
     total = Column(Numeric(12, 2), nullable=False)
+    status = Column(String, nullable=False, default="pending")    #added later to github entry
     created_at = Column(DateTime, default=datetime.utcnow)
 
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
