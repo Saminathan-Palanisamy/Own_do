@@ -355,3 +355,56 @@ def update_order_status(order_id: int,
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"order update failed: {str(e)}")
 #-------------------------------------------------------------------------------------------
+
+@router.patch("/orders/{order_id}/cancel", dependencies=[Depends(admin_or_user)])
+def cancel_order(order_id: int,
+                 db: Session = Depends(get_db),
+                 current_user: dict = Depends(get_current_user)):
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # USER VALIDATION — user can cancel only their own order
+    if current_user.role == "user" and order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You cannot cancel another user's order")
+
+    # CHECK STATUS — only pending/confirmed can be cancelled
+    if order.status not in {"pending", "confirmed"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order cannot be cancelled once it is {order.status}"
+        )
+
+    # RESTORE PRODUCT STOCK
+    for item in order.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if product:
+            product.stock += item.qty
+
+    # UPDATE STATUS
+    order.status = "cancelled"
+    db.commit()
+    db.refresh(order)
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "message": "Order cancelled successfully",
+            "data": {
+                "id": order.id,
+                "status": order.status,
+                "total": float(order.total),
+                "created_at": order.created_at.isoformat(),
+                "items": [
+                    {
+                        "product_id": i.product_id,
+                        "qty": i.qty,
+                        "price_snapshot": float(i.price_snapshot)
+                    }
+                    for i in order.items
+                ]
+            }
+        }
+    )
