@@ -61,7 +61,7 @@ def add_to_cart(payload: AddToCartRequest,
         )
 
     except Exception as e:
-        raise HTTPException(status_code=400,
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Cart item unable to add: {str(e)}")
 #------------------------------------------------------------------
 
@@ -111,7 +111,7 @@ def view_cart(db: Session = Depends(get_db),
             })
 
     except Exception as e:
-        raise HTTPException(status_code=400,
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Unable to fetch cart: {str(e)}")
 #-------------------------------------------------------------------------
 
@@ -367,16 +367,15 @@ def cancel_order(order_id: int,
         order = db.query(Order).filter(Order.id == order_id).first()
 
         if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
-        # USER VALIDATION — user can cancel only their own order
         if current_user.role == "user" and order.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="You cannot cancel another user's order")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot cancel another user's order")
 
         # CHECK STATUS — only pending/confirmed can be cancelled
         if order.status not in {"pending", "confirmed"}:
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Order cannot be cancelled once it is {order.status}"
             )
 
@@ -392,7 +391,7 @@ def cancel_order(order_id: int,
         db.refresh(order)
 
         return JSONResponse(
-            status_code=200,
+            status_code=status.HTTP_200_OK,
             content={
                 "message": "Order cancelled successfully",
                 "data": {
@@ -414,3 +413,38 @@ def cancel_order(order_id: int,
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"unable to view order: {str(e)}")
     
+#-------------------------------------------------------------------------------------
+@router.get("/my_orders", dependencies=[Depends(any_registered_user)])
+def user_orders(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        orders = db.query(Order).filter(Order.user_id == current_user.id).all()
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": "My orders fetched successfully",
+                "count": len(orders),
+                "data": [
+                    {
+                        "id": order.id,
+                        "total": float(order.total),
+                        "status": order.status,
+                        "created_at": order.created_at.isoformat(),
+                        "items": [
+                            {
+                                "product_id": item.product_id,
+                                "qty": item.qty,
+                                "price_snapshot": float(item.price_snapshot)
+                            }
+                            for item in order.items
+                        ]
+                    }
+                    for order in orders
+                ]
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Unable to fetch orders: {str(e)}")
