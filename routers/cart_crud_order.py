@@ -63,7 +63,7 @@ def add_to_cart(payload: AddToCartRequest,
     except Exception as e:
         raise HTTPException(status_code=400,
                             detail=f"Cart item unable to add: {str(e)}")
-
+#------------------------------------------------------------------
 
 @router.get("/view", dependencies=[Depends(admin_or_user)])
 def view_cart(db: Session = Depends(get_db),
@@ -113,7 +113,7 @@ def view_cart(db: Session = Depends(get_db),
     except Exception as e:
         raise HTTPException(status_code=400,
                             detail=f"Unable to fetch cart: {str(e)}")
-
+#-------------------------------------------------------------------------
 
 @router.delete("/remove/{product_id}", dependencies=[Depends(any_registered_user)])
 def remove_item(product_id: int,
@@ -232,60 +232,19 @@ def list_orders(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    {"pending", "confirmed", "shipped", "delivered", "cancelled"}
-    """
-    # 1. If order_id is provided → return that single order
-    if order_id is not None:
-        order = db.query(Order).filter(Order.id == order_id).first()
-        if not order:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    try:
+        """
+        {"pending", "confirmed", "shipped", "delivered", "cancelled"}
+        """
+        # 1. If order_id is provided → return that single order
+        if order_id is not None:
+            order = db.query(Order).filter(Order.id == order_id).first()
+            if not order:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-            "id": order.id,
-            "total": float(order.total),
-            "status": order.status,
-            "created_at": order.created_at.isoformat(),
-            "items": [
-                {
-                    "product_id": i.product_id,
-                    "qty": i.qty,
-                    "price_snapshot": float(i.price_snapshot)
-                }
-                for i in order.items
-            ]
-        }
-)
-    # 2. Build the base query
-    query = db.query(Order)
-
-    # 3. Filter by status if provided
-    if status_filter:
-        s = status_filter.lower().strip()
-        if s not in ALLOWED_STATUSES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
-            )
-        query = query.filter(Order.status == s)
-
-    # 4. Pagination logic
-    total_orders = query.count()
-    offset = (page - 1) * limit
-
-    orders = query.offset(offset).limit(limit).all()
-
-    # 5. Return paginated response
-    return JSONResponse({
-        "page": page,
-        "limit": limit,
-        "total_orders": total_orders,
-        "total_pages": (total_orders + limit - 1) // limit,
-        "status_filter": status_filter,
-        "orders": [
-            {
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
                 "id": order.id,
                 "total": float(order.total),
                 "status": order.status,
@@ -299,10 +258,54 @@ def list_orders(
                     for i in order.items
                 ]
             }
-            for order in orders
-        ]
-    }
-)
+    )
+        # 2. Build the base query
+        query = db.query(Order)
+
+        # 3. Filter by status if provided
+        if status_filter:
+            s = status_filter.lower().strip()
+            if s not in ALLOWED_STATUSES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
+                )
+            query = query.filter(Order.status == s)
+
+        # 4. Pagination logic
+        total_orders = query.count()
+        offset = (page - 1) * limit
+
+        orders = query.offset(offset).limit(limit).all()
+
+        # 5. Return paginated response
+        return JSONResponse({
+            "page": page,
+            "limit": limit,
+            "total_orders": total_orders,
+            "total_pages": (total_orders + limit - 1) // limit,
+            "status_filter": status_filter,
+            "orders": [
+                {
+                    "id": order.id,
+                    "total": float(order.total),
+                    "status": order.status,
+                    "created_at": order.created_at.isoformat(),
+                    "items": [
+                        {
+                            "product_id": i.product_id,
+                            "qty": i.qty,
+                            "price_snapshot": float(i.price_snapshot)
+                        }
+                        for i in order.items
+                    ]
+                }
+                for order in orders
+            ]
+        }
+    )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"unable to view order: {str(e)}")
 #-------------------------------------------------------------------------------------------
 
 
@@ -360,51 +363,54 @@ def update_order_status(order_id: int,
 def cancel_order(order_id: int,
                  db: Session = Depends(get_db),
                  current_user: dict = Depends(get_current_user)):
+    try:
+        order = db.query(Order).filter(Order.id == order_id).first()
 
-    order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        # USER VALIDATION — user can cancel only their own order
+        if current_user.role == "user" and order.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You cannot cancel another user's order")
 
-    # USER VALIDATION — user can cancel only their own order
-    if current_user.role == "user" and order.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="You cannot cancel another user's order")
+        # CHECK STATUS — only pending/confirmed can be cancelled
+        if order.status not in {"pending", "confirmed"}:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Order cannot be cancelled once it is {order.status}"
+            )
 
-    # CHECK STATUS — only pending/confirmed can be cancelled
-    if order.status not in {"pending", "confirmed"}:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Order cannot be cancelled once it is {order.status}"
-        )
+        # RESTORE PRODUCT STOCK
+        for item in order.items:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if product:
+                product.stock += item.qty
 
-    # RESTORE PRODUCT STOCK
-    for item in order.items:
-        product = db.query(Product).filter(Product.id == item.product_id).first()
-        if product:
-            product.stock += item.qty
+        # UPDATE STATUS
+        order.status = "cancelled"
+        db.commit()
+        db.refresh(order)
 
-    # UPDATE STATUS
-    order.status = "cancelled"
-    db.commit()
-    db.refresh(order)
-
-    return JSONResponse(
-        status_code=200,
-        content={
-            "message": "Order cancelled successfully",
-            "data": {
-                "id": order.id,
-                "status": order.status,
-                "total": float(order.total),
-                "created_at": order.created_at.isoformat(),
-                "items": [
-                    {
-                        "product_id": i.product_id,
-                        "qty": i.qty,
-                        "price_snapshot": float(i.price_snapshot)
-                    }
-                    for i in order.items
-                ]
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Order cancelled successfully",
+                "data": {
+                    "id": order.id,
+                    "status": order.status,
+                    "total": float(order.total),
+                    "created_at": order.created_at.isoformat(),
+                    "items": [
+                        {
+                            "product_id": i.product_id,
+                            "qty": i.qty,
+                            "price_snapshot": float(i.price_snapshot)
+                        }
+                        for i in order.items
+                    ]
+                }
             }
-        }
-    )
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"unable to view order: {str(e)}")
+    
