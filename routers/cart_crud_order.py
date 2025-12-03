@@ -236,7 +236,7 @@ def list_orders(
         """
         {"pending", "confirmed", "shipped", "delivered", "cancelled"}
         """
-        # 1. If order_id is provided → return that single order
+
         if order_id is not None:
             order = db.query(Order).filter(Order.id == order_id).first()
             if not order:
@@ -259,10 +259,10 @@ def list_orders(
                 ]
             }
     )
-        # 2. Build the base query
+
         query = db.query(Order)
 
-        # 3. Filter by status if provided
+        #  Filter by status if provided
         if status_filter:
             s = status_filter.lower().strip()
             if s not in ALLOWED_STATUSES:
@@ -272,13 +272,13 @@ def list_orders(
                 )
             query = query.filter(Order.status == s)
 
-        # 4. Pagination logic
+        #  Pagination logic
         total_orders = query.count()
         offset = (page - 1) * limit
 
         orders = query.offset(offset).limit(limit).all()
 
-        # 5. Return paginated response
+
         return JSONResponse({
             "page": page,
             "limit": limit,
@@ -372,20 +372,19 @@ def cancel_order(order_id: int,
         if current_user.role == "user" and order.user_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot cancel another user's order")
 
-        # CHECK STATUS — only pending/confirmed can be cancelled
         if order.status not in {"pending", "confirmed"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Order cannot be cancelled once it is {order.status}"
             )
 
-        # RESTORE PRODUCT STOCK
+
         for item in order.items:
             product = db.query(Product).filter(Product.id == item.product_id).first()
             if product:
                 product.stock += item.qty
 
-        # UPDATE STATUS
+
         order.status = "cancelled"
         db.commit()
         db.refresh(order)
@@ -448,3 +447,4 @@ def user_orders(
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Unable to fetch orders: {str(e)}")
+#----------------------------------------------------------------------------

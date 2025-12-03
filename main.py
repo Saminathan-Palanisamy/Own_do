@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import auth,check, category_crud, product_crud,cart_crud_order
+from routers import auth,check, category_crud, product_crud,cart_crud_order,notification
 from core.database import Base, engine
 from fastapi.responses import JSONResponse
 from fastapi import status
@@ -15,6 +15,7 @@ app.include_router(check.router, prefix="/List_active_sessions", tags=["View_pur
 app.include_router(category_crud.router,prefix="/categories", tags=["Categories"])
 app.include_router(product_crud.router,prefix="/products", tags=["Products"])
 app.include_router(cart_crud_order.router, prefix="/carts", tags=["Carts"])
+app.include_router(notification.router, prefix="/notifications", tags=["Notifications"])
 
 @app.get("/")
 def root():

@@ -35,7 +35,7 @@ def register(
 
             if not current_user:
                 raise HTTPException(
-                    status_code=403,
+                    status_code=status.HTTP_403_FORBIDDEN,
                     detail="Admin authentication required to create users"
                 )
 
@@ -43,7 +43,7 @@ def register(
 
             if not user_obj or user_obj.role != "admin":
                 raise HTTPException(
-                    status_code=403,
+                    status_code=status.HTTP_403_FORBIDDEN,
                     detail="Only admin can create new users"
                 )
 
@@ -56,7 +56,7 @@ def register(
         existing = db.query(models.User).filter(models.User.email == payload.email).first()
 
         if existing:
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
 
         new_user = models.User(
@@ -83,7 +83,7 @@ def register(
         })
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in registering user: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error in registering user: {str(e)}")
 #----------------------------------------------------------------------
 
 
