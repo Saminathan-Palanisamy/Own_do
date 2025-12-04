@@ -20,7 +20,7 @@ def send_notification(payload: NotificationCreate, db: Session = Depends(get_db)
     Admin sends notification to a specific user (payload.user_id) or to ALL users if user_id is omitted/null.
     """
     try:
-        # resolve targets
+
         target_users = []
         if payload.user_id is None:
             target_users = db.query(User).all()
@@ -32,7 +32,7 @@ def send_notification(payload: NotificationCreate, db: Session = Depends(get_db)
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
             target_users = [user]
 
-        # create notifications
+
         created = 0
         for u in target_users:
             notif = Notification(
@@ -50,10 +50,9 @@ def send_notification(payload: NotificationCreate, db: Session = Depends(get_db)
         )
 
     except HTTPException:
-        # re-raise HTTP exceptions unchanged
         raise
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Notification sending failed: {str(e)}"})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Notification sending failed."})
 
 
 @router.get("/my", dependencies=[Depends(any_registered_user)])
@@ -78,7 +77,7 @@ def my_notifications(db: Session = Depends(get_db), current_user: dict = Depends
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Notifications fetched successfully", "count": len(data), "data": data})
 
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Unable to fetch notifications: {str(e)}"})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Unable to fetch notifications."})
 
 
 @router.get("/view_all", dependencies=[Depends(admin_required)])
@@ -102,7 +101,7 @@ def all_notifications(db: Session = Depends(get_db), current_user: dict = Depend
 
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "All notifications fetched successfully", "count": len(data), "data": data})
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Unable to fetch notifications: {str(e)}"})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Unable to fetch notifications."})
 
 
 @router.patch("/read/{notif_id}", dependencies=[Depends(any_registered_user)])
@@ -120,7 +119,7 @@ def mark_as_read(notif_id: int, db: Session = Depends(get_db), current_user: dic
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Notification marked as read", "id": notif_id})
 
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Unable to mark notification: {str(e)}"})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Unable to mark notification."})
 
 
 @router.delete("/delete/{notif_id}", dependencies=[Depends(any_registered_user)])
@@ -138,7 +137,7 @@ def delete_notification(notif_id: int, db: Session = Depends(get_db), current_us
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Notification deleted successfully", "id": notif_id})
 
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Unable to delete notification: {str(e)}"})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Unable to delete notification."})
 
 
 # -------------------------
@@ -171,7 +170,7 @@ def send_to_all(payload: dict, db: Session = Depends(get_db), current_user: dict
         db.commit()
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Notifications sent to all users", "sent_count": created})
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Sending failed: {str(e)}"})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Sending failed."})
 
 
 @router.post("/send-to-role/{role_name}", dependencies=[Depends(admin_required)])
@@ -201,7 +200,7 @@ def send_to_role(role_name: str, payload: dict, db: Session = Depends(get_db), c
         db.commit()
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": f"Notifications sent to role {role_name}", "sent_count": created})
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Sending failed: {str(e)}"})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Sending failed."})
 
 
 @router.get("/unread-count", dependencies=[Depends(any_registered_user)])
@@ -214,4 +213,4 @@ def unread_count(db: Session = Depends(get_db), current_user: dict = Depends(get
         count = db.query(Notification).filter(Notification.user_id == current_user.id, Notification.is_read == False).count()
         return JSONResponse(status_code=status.HTTP_200_OK, content={"unread": count})
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Unable to compute unread count: {str(e)}"})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Unable to compute unread count."})

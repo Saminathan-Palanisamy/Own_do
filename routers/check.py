@@ -39,5 +39,5 @@ def list_login_sessions_active(db:Session=Depends(get_db), current_user:dict=Dep
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail=f"listing failed:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail="listing failed.")
     

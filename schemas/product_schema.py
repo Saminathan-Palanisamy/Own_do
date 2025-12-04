@@ -22,7 +22,6 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    category_id: int
     image_urls: List[str] = []  
 
 

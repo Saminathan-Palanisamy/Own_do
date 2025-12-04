@@ -49,7 +49,7 @@ def register(
 
             if payload.role == UserRole.ADMIN and user_obj.role != "admin":
                 raise HTTPException(
-                    status_code=403,
+                    status_code=status.HTTP_403_FORBIDDEN,
                     detail="Only admin can assign admin role"
                 )
 
@@ -83,7 +83,7 @@ def register(
         })
 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error in registering user: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error in registering user")
 #----------------------------------------------------------------------
 
 
@@ -120,7 +120,7 @@ def login_user(request: Request, response: Response, payload: schemas.LoginReque
         )
 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"login failed:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"login failed.")
     
     
 #---------------------------------------------------------------------------------------------------------
@@ -137,7 +137,7 @@ def refresh_using_secure(payload: schemas.RefreshRequest, db: Session = Depends(
             )
     
     except HTTPException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"refresh failed:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"refresh failed.")
 #--------------------------------------------------------------------------------
 @router.post("/logout")
 def logout(payload: schemas.LogoutRequest, db: Session = Depends(database.get_db)):
@@ -160,5 +160,5 @@ def logout(payload: schemas.LogoutRequest, db: Session = Depends(database.get_db
             {"detail": "Logged out"}
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unable to login.:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unable to login.")
 #--------------------------------------------------------------------------------

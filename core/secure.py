@@ -17,7 +17,7 @@ from models.models import Cart
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = os.getenv("JWT_SECRET", "supersecret")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 10))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 2))
 
 
@@ -134,7 +134,7 @@ def initialize_session(user_id: int, user_payload: dict, request: Request, db: S
         return session_uid, access_token
     
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"session creation failed: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session creation failed.")
 
 # Refresh endpoint logic: validate refresh token.
 def refresh_session(session_id: str, db: Session):
@@ -171,7 +171,7 @@ def refresh_session(session_id: str, db: Session):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"refresh failed: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="refresh failed.")
 
 
 #----------------------------------------------------------------------------

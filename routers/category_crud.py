@@ -44,7 +44,7 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db), curr
             }
         ) 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Category creation failed:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category creation failed.")
 
 
 
@@ -93,7 +93,7 @@ def list_categories(db: Session = Depends(get_db), current_user:dict=Depends(get
                 }
             )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"Unable to fetch list:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Unable to fetch list.")
 
 
 # -----------------------------------------------------------
@@ -132,7 +132,7 @@ def update_category(category_id: int, payload: CategoryUpdate, db: Session = Dep
 
         ) 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"update failed:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="update failed.")
 
 # -----------------------------------------------------------
 @router.delete("/delete_category/{category_id}", dependencies=[Depends(admin_required)])
@@ -156,5 +156,5 @@ def delete_category(category_id: int, db: Session = Depends(get_db),current_user
                 }
         )
     except Exception as e:
-        raise HTTPException(status_codee=status.HTTP_400_BAD_REQUEST,detail=f"unable to delete:{str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="unable to delete.")
 #---------------------------------------------------------------------------------------------------------------

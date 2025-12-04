@@ -62,7 +62,7 @@ def add_to_cart(payload: AddToCartRequest,
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Cart item unable to add: {str(e)}")
+                            detail=f"Cart item unable to add.")
 #------------------------------------------------------------------
 
 @router.get("/view", dependencies=[Depends(admin_or_user)])
@@ -112,7 +112,7 @@ def view_cart(db: Session = Depends(get_db),
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Unable to fetch cart: {str(e)}")
+                            detail="Unable to fetch cart.")
 #-------------------------------------------------------------------------
 
 @router.delete("/remove/{product_id}", dependencies=[Depends(any_registered_user)])
@@ -140,7 +140,7 @@ def remove_item(product_id: int,
 )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Unable to remove item: {str(e)}")
+                            detail="Unable to remove item.")
 
 #-------------------------------------------------------------------------------------------
 
@@ -161,7 +161,7 @@ def place_order(db: Session = Depends(get_db),
             product = db.query(Product).filter(Product.id == item.product_id).first()
 
             if not product:
-                raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product {item.product_id} not found")
 
             if product.stock < item.qty:
                 raise HTTPException(
@@ -220,7 +220,7 @@ def place_order(db: Session = Depends(get_db),
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Order placement failed: {str(e)}")
+                            detail="Order placement failed.")
 
 #-----------------------------------------------------------------------------------------------------------------
 @router.get("/orders", dependencies=[Depends(admin_required)])
@@ -305,7 +305,7 @@ def list_orders(
         }
     )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"unable to view order: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="unable to view order.")
 #-------------------------------------------------------------------------------------------
 
 
@@ -322,7 +322,7 @@ def update_order_status(order_id: int,
 
         if new_status not in ALLOWED_STATUSES:
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
             )
 
@@ -356,7 +356,7 @@ def update_order_status(order_id: int,
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"order update failed: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="order update failed.")
 #-------------------------------------------------------------------------------------------
 
 @router.patch("/orders/{order_id}/cancel", dependencies=[Depends(admin_or_user)])
@@ -410,7 +410,7 @@ def cancel_order(order_id: int,
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"unable to view order: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="unable to view order.")
     
 #-------------------------------------------------------------------------------------
 @router.get("/my_orders", dependencies=[Depends(any_registered_user)])
@@ -446,5 +446,5 @@ def user_orders(
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Unable to fetch orders: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to fetch orders.")
 #----------------------------------------------------------------------------
