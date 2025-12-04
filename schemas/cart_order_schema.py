@@ -11,6 +11,7 @@ class AddToCartRequest(CartItemBase):
 
 class CartItemResponse(CartItemBase):
     price_snapshot: float
+    total_price: float
 
     class Config:
         orm_mode = True
@@ -23,7 +24,8 @@ class CartResponse(BaseModel):
 
     class Config:
         orm_mode = True
-
+class UpdateCartRequest(BaseModel):
+    qty: int
 
 # ORDER
 class OrderItemResponse(BaseModel):

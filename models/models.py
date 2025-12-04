@@ -93,6 +93,7 @@ class CartItem(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
     qty = Column(Integer, nullable=False)
     price_snapshot = Column(Numeric(10, 2), nullable=False)
+    total_price = Column(Numeric(12, 2), nullable=False)
 
     cart = relationship("Cart", back_populates="items")
     product = relationship("Product")  

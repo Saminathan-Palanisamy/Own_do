@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from core.database import get_db
-from schemas.cart_order_schema import AddToCartRequest, CartResponse,OrderResponse,UpdateOrderStatusRequest
+from schemas.cart_order_schema import AddToCartRequest, CartResponse,OrderResponse,UpdateOrderStatusRequest,UpdateCartRequest
 from models.models import Cart, CartItem, Product,Order,OrderItem
 from core.role_based import any_registered_user, admin_or_user, admin_required
 from core.secure import get_current_user, get_or_create_cart
@@ -36,12 +36,16 @@ def add_to_cart(payload: AddToCartRequest,
 
         if item:
             item.qty += payload.qty
+            item.total_price = item.qty * float(item.price_snapshot)
         else:
+            price_snapshot = float(product.price)
+            total_price = float(payload.qty) * price_snapshot
             item = CartItem(
                 cart_id=cart.id,
                 product_id=payload.product_id,
                 qty=payload.qty,
-                price_snapshot=product.price
+                price_snapshot=price_snapshot,
+                total_price = total_price
             )
             db.add(item)
 
@@ -55,7 +59,8 @@ def add_to_cart(payload: AddToCartRequest,
             "data": {
                 "product_id": item.product_id,
                 "qty": item.qty,
-                "price_snapshot": float(item.price_snapshot)
+                "price_snapshot": float(item.price_snapshot),
+                "total_price": float(item.total_price)
             }
             }
         )
@@ -64,6 +69,61 @@ def add_to_cart(payload: AddToCartRequest,
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Cart item unable to add.")
 #------------------------------------------------------------------
+@router.patch("/update/{product_id}", dependencies=[Depends(any_registered_user)])
+def update_cart_item(
+    product_id: int,
+    payload: UpdateCartRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update quantity of an item in the user's cart. 
+    If qty <= 0, item is removed.
+    """
+    try:
+        cart = get_or_create_cart(current_user.id, db)
+
+        item = db.query(CartItem).filter(
+            CartItem.cart_id == cart.id,
+            CartItem.product_id == product_id
+        ).first()
+
+        if not item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cart item not found")
+
+        if payload.qty <= 0:
+            db.delete(item)
+            db.commit()
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"message": "Item removed from cart"}
+            )
+
+        item.qty = payload.qty
+        item.total_price = float(item.qty) * float(item.price_snapshot)
+
+        db.commit()
+        db.refresh(item)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": "Cart item updated successfully",
+                "data": {
+                    "product_id": item.product_id,
+                    "qty": item.qty,
+                    "price_snapshot": float(item.price_snapshot),
+                    "total_price": float(item.total_price)
+                }
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to update cart item."
+        )
+#-------------------------------------------------------------------------
 
 @router.get("/view", dependencies=[Depends(admin_or_user)])
 def view_cart(db: Session = Depends(get_db),
@@ -77,6 +137,7 @@ def view_cart(db: Session = Depends(get_db),
                 status_code=status.HTTP_200_OK,
                 content={
                 "message": "Cart fetched successfully",
+                "cart count":len(cart.items),
                 "data": {
                     "id": cart.id,
                     "user_id": cart.user_id,
@@ -84,7 +145,8 @@ def view_cart(db: Session = Depends(get_db),
                         {
                             "product_id": i.product_id,
                             "qty": i.qty,
-                            "price_snapshot": float(i.price_snapshot)
+                            "price_snapshot": float(i.price_snapshot),
+                            "total_price": float(i.total_price)
                         }
                         for i in cart.items
                     ]
