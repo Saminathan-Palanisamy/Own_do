@@ -391,7 +391,13 @@ def update_order_status(order_id: int,
         order = db.query(Order).filter(Order.id == order_id).first()
         if not order:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        old_status = order.status   
 
+        if new_status == "cancelled" and old_status != "cancelled":
+            for item in order.items:
+                product = db.query(Product).filter(Product.id == item.product_id).first()
+                if product:
+                    product.stock += item.qty
 
         order.status = new_status
         db.commit()

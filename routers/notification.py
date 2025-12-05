@@ -25,7 +25,7 @@ def send_notification(payload: NotificationCreate, db: Session = Depends(get_db)
         if payload.user_id is None:
             target_users = db.query(User).all()
             if not target_users:
-                return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "No users to send to", "sent_count": 0})
+                raise JSONResponse(status_code=status.HTTP_200_OK, content={"message": "No users to send to", "sent_count": 0})
         else:
             user = db.query(User).filter(User.id == payload.user_id).first()
             if not user:
@@ -52,7 +52,7 @@ def send_notification(payload: NotificationCreate, db: Session = Depends(get_db)
     except HTTPException:
         raise
     except Exception as e:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Notification sending failed."})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail= "Notification sending failed.")
 
 
 @router.get("/my", dependencies=[Depends(any_registered_user)])
