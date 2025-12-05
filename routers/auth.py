@@ -11,6 +11,8 @@ from schemas.schemas import UserRole
 from core.secure import get_current_user, hash_password, optional_current_user
 from fastapi import Request, Response
 from core.secure import bearer_scheme
+from utilities.email_utils import send_welcome_email
+
 
 router = APIRouter()
 
@@ -21,7 +23,7 @@ get_db = database.get_db
 #--------------------------------------------------------------------------------
 #
 @router.post("/register", response_model=schemas.RegisterResponse,dependencies=[Depends(bearer_scheme)])
-def register(
+async def register(
     payload: schemas.RegisterRequest,
     db: Session = Depends(database.get_db),
     current_user: dict | None = Depends(secure.optional_current_user)
@@ -71,8 +73,16 @@ def register(
         db.commit()
         db.refresh(new_user)
 
+        try:
+            
+            send_welcome_email(new_user.email, new_user.username)
+        except Exception:
+            pass 
 
-        return JSONResponse({
+
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={
             "status": "Success",
             "data": {
                 "id": new_user.id,
@@ -83,7 +93,7 @@ def register(
         })
 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error in registering user")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error in registering user: {str(e)}")
 #----------------------------------------------------------------------
 
 

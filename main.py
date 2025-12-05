@@ -17,6 +17,8 @@ app.include_router(product_crud.router,prefix="/products", tags=["Products"])
 app.include_router(cart_crud_order.router, prefix="/carts", tags=["Carts"])
 app.include_router(notification.router, prefix="/notifications", tags=["Notifications"])
 
+
+
 @app.get("/")
 def root():
     return JSONResponse(

@@ -7,6 +7,9 @@ from core.role_based import any_registered_user, admin_or_user, admin_required
 from core.secure import get_current_user, get_or_create_cart
 from core import database
 from fastapi.responses import JSONResponse
+from models.models import Notification
+from utilities.email_utils import send_order_status_email
+
 
 router = APIRouter() 
 get_db = database.get_db
@@ -258,6 +261,11 @@ def place_order(db: Session = Depends(get_db),
         db.query(CartItem).filter(CartItem.cart_id == cart.id).delete()
 
         db.commit()
+        try:
+            
+            send_order_status_email(current_user.email, current_user.username, order.id, order.status)
+        except Exception:
+            pass 
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -369,62 +377,63 @@ def list_orders(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="unable to view order.")
 #-------------------------------------------------------------------------------------------
-
-
 @router.patch("/orders/{order_id}/status", dependencies=[Depends(admin_required)])
 def update_order_status(order_id: int,
                         payload: UpdateOrderStatusRequest,
                         db: Session = Depends(get_db),
                         current_user: dict = Depends(get_current_user)):
-    """
-    {"pending", "confirmed", "shipped", "delivered", "cancelled"}
-    """
+
     try:
         new_status = payload.status.lower().strip()
 
         if new_status not in ALLOWED_STATUSES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
 
         order = db.query(Order).filter(Order.id == order_id).first()
         if not order:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-        old_status = order.status   
 
-        if new_status == "cancelled" and old_status != "cancelled":
+        old_status = order.status
+
+ 
+        if new_status == old_status:
+            return JSONResponse(
+                status_code=200,
+                content={"message": "No status change — notification not sent."}
+            )
+
+
+        if new_status == "cancelled":
             for item in order.items:
                 product = db.query(Product).filter(Product.id == item.product_id).first()
                 if product:
                     product.stock += item.qty
 
+
         order.status = new_status
         db.commit()
         db.refresh(order)
 
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "message": "Order status updated",
-                "data": {
-                    "id": order.id,
-                    "status": order.status,
-                    "total": float(order.total),
-                    "created_at": order.created_at.isoformat(),
-                    "items": [
-                        {
-                            "product_id": i.product_id,
-                            "qty": i.qty,
-                            "price_snapshot": float(i.price_snapshot)
-                        }
-                        for i in order.items
-                    ]
-                }
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="order update failed.")
+        status_messages = {
+            "pending":    f"Your order #{order.id} is pending.",
+            "confirmed":  f"Your order #{order.id} has been confirmed.",
+            "shipped":    f"Your order #{order.id} has been shipped.",
+            "delivered":  f"Your order #{order.id} has been delivered.",
+            "cancelled":  f"Your order #{order.id} has been cancelled.",
+        }
+
+
+        db.add(Notification(
+            user_id=order.user_id,
+            message=status_messages[new_status]
+        ))
+        db.commit()
+
+        return {"message": "Order status updated & notification sent"}
+
+    except Exception:
+        raise HTTPException(status_code=400, detail="Order update failed")
+
 #-------------------------------------------------------------------------------------------
 
 @router.patch("/orders/{order_id}/cancel", dependencies=[Depends(admin_or_user)])
