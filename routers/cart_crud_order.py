@@ -7,8 +7,8 @@ from core.role_based import any_registered_user, admin_or_user, admin_required
 from core.secure import get_current_user, get_or_create_cart
 from core import database
 from fastapi.responses import JSONResponse
-from models.models import Notification
-from utilities.email_utils import send_order_status_email
+from models.models import Notification, User
+from utilities.email_utils import send_order_status_email, send_order_change_status_email
 
 
 router = APIRouter() 
@@ -398,7 +398,7 @@ def update_order_status(order_id: int,
  
         if new_status == old_status:
             return JSONResponse(
-                status_code=200,
+                status_code=status.HTTP_200_OK,
                 content={"message": "No status change — notification not sent."}
             )
 
@@ -428,11 +428,19 @@ def update_order_status(order_id: int,
             message=status_messages[new_status]
         ))
         db.commit()
+        customer = db.query(User).filter(User.id == order.user_id).first()
+
+        if not customer:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+        try:
+            send_order_status_email(customer.email, customer.username, order.id, new_status)
+        except Exception:
+            pass 
 
         return {"message": "Order status updated & notification sent"}
 
     except Exception:
-        raise HTTPException(status_code=400, detail="Order update failed")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order update failed")
 
 #-------------------------------------------------------------------------------------------
 
