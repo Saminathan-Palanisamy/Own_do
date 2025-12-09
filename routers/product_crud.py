@@ -5,7 +5,7 @@ from core import database
 from core.database import get_db
 from schemas.product_schema import (ProductCreate,ProductUpdate,ProductResponse)
 from models.models import Product, ProductImage, Category
-from core.secure import get_current_user
+from core.secure import get_current_user, check_and_notify_low_stock
 from core.role_based import admin_or_user,admin_required,any_registered_user
 from typing import List
 # from models.models import UserRole,ADMIN, USER
@@ -98,6 +98,7 @@ def update_product(product_id: int,payload: ProductUpdate,db: Session = Depends(
 
         if payload.stock is not None:
             product.stock = payload.stock
+            check_and_notify_low_stock(product, db)
 
         if payload.image_urls is not None:
 

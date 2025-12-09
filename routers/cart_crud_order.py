@@ -4,11 +4,11 @@ from core.database import get_db
 from schemas.cart_order_schema import AddToCartRequest, CartResponse,OrderResponse,UpdateOrderStatusRequest,UpdateCartRequest
 from models.models import Cart, CartItem, Product,Order,OrderItem
 from core.role_based import any_registered_user, admin_or_user, admin_required
-from core.secure import get_current_user, get_or_create_cart
+from core.secure import get_current_user, get_or_create_cart, check_and_notify_low_stock
 from core import database
 from fastapi.responses import JSONResponse
 from models.models import Notification, User
-from utilities.email_utils import send_order_status_email, send_order_change_status_email
+from utilities.email_utils import send_order_status_email, send_order_change_status_email, send_order_change_own_status_email
 
 
 router = APIRouter() 
@@ -247,6 +247,7 @@ def place_order(db: Session = Depends(get_db),
         for item in cart.items:
             product = db.query(Product).filter(Product.id == item.product_id).first()
             product.stock -= item.qty  
+            check_and_notify_low_stock(product, db)
 
             oi = OrderItem(
                 order_id=order.id,
@@ -263,7 +264,7 @@ def place_order(db: Session = Depends(get_db),
         db.commit()
         try:
             
-            send_order_status_email(current_user.email, current_user.username, order.id, order.status)
+            send_order_status_email(current_user.email, current_user.username, order.id, order.status,product.name, order.total)
         except Exception:
             pass 
 
@@ -433,14 +434,16 @@ def update_order_status(order_id: int,
         if not customer:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
         try:
-            send_order_status_email(customer.email, customer.username, order.id, new_status)
+            send_order_change_status_email(customer.email, customer.username, order.id, new_status, product.name,order.total)
         except Exception:
             pass 
 
-        return {"message": "Order status updated & notification sent"}
-
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Order status updated & notification sent."}
+        )
     except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order update failed")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order update failed.")
 
 #-------------------------------------------------------------------------------------------
 
@@ -473,6 +476,11 @@ def cancel_order(order_id: int,
         order.status = "cancelled"
         db.commit()
         db.refresh(order)
+
+        try:
+            send_order_change_own_status_email(current_user.email, current_user.username, order.id, order.status, product.name,order.total)
+        except Exception:
+            pass 
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,

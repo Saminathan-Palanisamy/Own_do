@@ -11,7 +11,8 @@ from fastapi.responses import JSONResponse
 import uuid
 from fastapi import Request
 from enum import Enum
-from models.models import Cart
+from models.models import Cart, Product, Notification, User
+
 
 
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -185,3 +186,30 @@ def get_or_create_cart(user_id: int, db: Session):
         db.refresh(cart)
     return cart
 #---------------------------------------------------------------------------
+
+
+LOW_STOCK_LIMIT = 5  # GLOBAL DEFAULT
+
+def check_and_notify_low_stock(product: Product, db: Session):
+    """
+    Called after:
+    - stock reduces (order placed)
+    - product updated
+    - stock manually edited by admin
+    """
+    try:
+
+        if product.stock <= LOW_STOCK_LIMIT:
+            # Get admin users
+            admins = db.query(User).filter(User.role == "admin").all()
+
+            for admin in admins:
+                db.add(Notification(
+                    user_id=admin.id,
+                    message=f"⚠️ Low stock alert: '{product.name}' has only {product.stock} left!"
+                ))
+
+            db.commit()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unable to send notification")
+#-------------------------------------------------------------------------
