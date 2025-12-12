@@ -8,7 +8,8 @@ from models.models import Product, ProductImage, Category
 from core.secure import get_current_user, check_and_notify_low_stock
 from core.role_based import admin_or_user,admin_required,any_registered_user
 from typing import List
-# from models.models import UserRole,ADMIN, USER
+
+
 
 router = APIRouter()
 get_db = database.get_db
@@ -52,6 +53,7 @@ def create_products(category_id: int, payload: List[ProductCreate],
                 db.add(ProductImage(product_id=new_product.id, image_path=url))
 
             db.commit()
+
 
             created_products.append({
                 "id": new_product.id,

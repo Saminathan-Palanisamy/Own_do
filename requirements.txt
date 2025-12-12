@@ -1,3 +1,14 @@
 
 bcrypt==4.0.1
 passlib[bcrypt]==1.7.4
+python-multipart
+openai
+PyPDF2
+python-docx 
+python-pptx
+pgvector
+sqlalchemy 
+psycopg2-binary
+faiss-cpu 
+pdfplumber
+langchain-community

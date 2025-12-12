@@ -5,7 +5,7 @@ import uuid
 import enum
 from datetime import datetime
 from sqlalchemy.orm import relationship
-
+from sqlalchemy.dialects import postgresql
 from core.database import Base
 
 class UserRole(enum.Enum):
@@ -134,3 +134,23 @@ class Notification(Base):
     created_at = Column(DateTime, default=func.now())
 
     user = relationship("User")
+#---------------------------------------------------------------------------------------
+class Document(Base):
+    __tablename__ = "documents"
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, nullable=False)
+    uploader_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(DateTime, default=func.now())
+    uploader = relationship("User")
+    chunks = relationship("DocumentChunk", back_populates="document")
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    # don't store embedding here if using FAISS only; if you want store too:
+    embedding = Column(postgresql.ARRAY(Float), nullable=True)
+    document = relationship("Document", back_populates="chunks")
+#-----------------------------------------------------------------------------------------------
