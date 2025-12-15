@@ -10,10 +10,9 @@ from core.role_based import admin_required, any_registered_user, admin_or_user
 from core.secure import get_current_user
 from fastapi.responses import JSONResponse
 import os, uuid, traceback
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# try to use langchain_text_splitters if available for better splitting
 try:
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
     _HAS_SPLITTER = True
 except Exception:
     _HAS_SPLITTER = False
@@ -69,7 +68,7 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db),
             doc = docx.Document(path)
             content = "\n".join([p.text for p in doc.paragraphs])
         else:
-            raise HTTPException(status_code=400, detail="Unsupported file type")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type")
 
         # save Document row
         doc = Document(filename=filename, uploader_id=current_user.id)
@@ -80,7 +79,7 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db),
         # chunk text
         chunks = chunk_text(content)
         if not chunks:
-            raise HTTPException(status_code=400, detail="No text extracted from document")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No text extracted from document")
 
         # create embeddings
         embeddings = embed_texts(chunks)
@@ -118,7 +117,7 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db),
 @router.get("/search", dependencies=[Depends(admin_or_user)])
 def search(q: str, k: int = 5, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if not q:
-        raise HTTPException(status_code=400, detail="Query is required")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Query is required")
     try:
         q_emb = embed_query(q)
         results = faiss_index.search(q_emb, k=k)

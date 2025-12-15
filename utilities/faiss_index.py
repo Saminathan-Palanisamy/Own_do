@@ -1,6 +1,5 @@
-# utilities/faiss_index.py
+
 # Simple FAISS wrapper with disk persistence.
-# If faiss is not available on your system, this class will raise a clear error.
 import os
 import pickle
 from typing import List, Dict, Any
