@@ -11,6 +11,8 @@ from core.secure import get_current_user
 from fastapi.responses import JSONResponse
 import os, uuid, traceback
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from utilities.llm_answer import generate_rag_answer
+
 
 try:
     _HAS_SPLITTER = True
@@ -123,18 +125,48 @@ def search(q: str, k: int = 5, db: Session = Depends(get_db), current_user: dict
         results = faiss_index.search(q_emb, k=k)
         ids = [r["metadata_id"] for r in results]
         chunks = db.query(DocumentChunk).filter(DocumentChunk.id.in_(ids)).all()
-        chunk_map = {c.id: c for c in chunks}
-        out = []
-        for r in results:
-            c = chunk_map.get(r["metadata_id"])
-            if not c:
-                continue
-            out.append({
-                "chunk_id": c.id,
-                "document_id": c.document_id,
-                "text_snippet": (c.text[:500] + "...") if len(c.text) > 500 else c.text,
-                "score": r["score"]
+        # chunk_map = {c.id: c for c in chunks}
+        # out = []
+        # for r in results:
+        #     c = chunk_map.get(r["metadata_id"])
+        #     if not c:
+        #         continue
+        #     out.append({
+        #         "chunk_id": c.id,
+        #         "document_id": c.document_id,
+        #         "text_snippet": (c.text[:500] + "...") if len(c.text) > 500 else c.text,
+        #         "score": r["score"]
+        #     })
+        # return {"query": q, "results": out}
+        if not chunks:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                "query": q,
+                "answer": "No relevant information found",
+                "sources": []
             })
-        return {"query": q, "results": out}
+
+        #  Build context for LLM
+        context = "\n\n".join(
+            [f"- {c.text}" for c in chunks]
+        )
+
+        #  Generate RAG answer
+        answer = generate_rag_answer(q, context)
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+            "query": q,
+            "answer": answer,
+            "sources": [
+                {
+                    "chunk_id": c.id,
+                    "document_id": c.document_id,
+                    "text_snippet": c.text[:300] + "..."
+                }
+                for c in chunks
+            ]
+        })
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Search failed. {str(e)}")
